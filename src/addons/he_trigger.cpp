@@ -21,7 +21,7 @@ void HETriggerAddon::setup() {
     muxPinArray[2] = options.muxADCPin2;
     muxPinArray[3] = options.muxADCPin3;
     for(int i = 0; i < muxTotal; i++) {
-        if ( muxPinArray[i] >= 26 && muxPinArray[i] <= 29 ) {
+        if (muxPinArray[i] >= static_cast<Pin_t>(ADC_BASE_PIN) && muxPinArray[i] < static_cast<Pin_t>(ADC_BASE_PIN + NUM_ADC_CHANNELS - 1)) {
             adc_gpio_init(muxPinArray[i]);
         }
     }
@@ -43,15 +43,21 @@ void HETriggerAddon::setup() {
             break;
     }
 
-    selectPinArray[0] = options.selectPin0;
-    selectPinArray[1] = options.selectPin1;
-    selectPinArray[2] = options.selectPin2;
-    selectPinArray[3] = options.selectPin3;
-    for(int i = 0; i < selectPins; i++) {
-        if ( selectPinArray[i] != -1 ) {
-            gpio_init(selectPinArray[i]);
-            gpio_set_dir(selectPinArray[i], GPIO_OUT);
-            gpio_put(selectPinArray[i], 0);
+    for(int mux = 0; mux < 4; mux++) {
+        int src = options.separateSelectPins ? mux : 0;
+        selectPinArray[mux][0] = options.muxes[src].selectPin0;
+        selectPinArray[mux][1] = options.muxes[src].selectPin1;
+        selectPinArray[mux][2] = options.muxes[src].selectPin2;
+        selectPinArray[mux][3] = options.muxes[src].selectPin3;
+    }
+
+    for(int mux = 0; mux < muxTotal; mux++) {
+        for(int i = 0; i < selectPins; i++) {
+            if ( selectPinArray[mux][i] != -1 ) {
+                gpio_init(selectPinArray[mux][i]);
+                gpio_set_dir(selectPinArray[mux][i], GPIO_OUT);
+                gpio_put(selectPinArray[mux][i], 0);
+            }
         }
     }
 
@@ -65,10 +71,10 @@ void HETriggerAddon::setup() {
                 continue;
             mux = (i / options.muxChannels);
             channel = (i % options.muxChannels);
-            selectChannel(channel);
+            selectChannel(mux, channel);
             // Only Switch ADC if we are not currently on the mux ADC
             if ( lastADCSelected != muxPinArray[mux]) {
-                adc_select_input(muxPinArray[mux]-26);
+                adc_select_input(muxPinArray[mux] - ADC_BASE_PIN);
                 lastADCSelected = muxPinArray[mux];
             }
             emaSmoothingReads[i] = adc_read();
@@ -79,11 +85,11 @@ void HETriggerAddon::setup() {
     }
 }
 
-void HETriggerAddon::selectChannel(uint8_t channel) {
+void HETriggerAddon::selectChannel(uint8_t mux, uint8_t channel) {
     for(int i = 0; i < selectPins; i++) {
-        if ( selectPinArray[i] != -1 ) {
-            gpio_put(selectPinArray[i], (channel >> i) & 0x01);
-        }   
+        if ( selectPinArray[mux][i] != -1 ) {
+            gpio_put(selectPinArray[mux][i], (channel >> i) & 0x01);
+        }
     }
 }
 
@@ -94,18 +100,29 @@ uint16_t HETriggerAddon::emaSmoothing(uint16_t value, uint16_t previous) {
 }
 
 void HETriggerAddon::preprocess() {
+    scan(true);
+}
+
+// Web config skips core0 add-ons, so only track sensor state for LEDs and the display
+void HETriggerAddon::configModeProcess() {
+    lastADCSelected = -1; // calibration reads may have switched the ADC input
+    scan(false);
+}
+
+void HETriggerAddon::scan(bool applyActions) {
     Gamepad * gamepad = Storage::getInstance().GetGamepad();
     HETriggerOptions & options = Storage::getInstance().getAddonOptions().heTriggerOptions;
+    gamepad->state.heTriggers = 0;
     for (uint8_t he = 0; he < 32; he++) {
         // Ignore triggers with no actions
         if (options.triggers[he].action == -10 )
             continue;
         mux = (he / options.muxChannels);
         channel = (he % options.muxChannels);
-        selectChannel(channel);
+        selectChannel(mux, channel);
         // Only Switch ADC if we are not currently on the mux ADC
         if ( lastADCSelected != muxPinArray[mux]) {
-            adc_select_input(muxPinArray[mux]-26);
+            adc_select_input(muxPinArray[mux] - ADC_BASE_PIN);
             lastADCSelected = muxPinArray[mux];
         }
 
@@ -130,6 +147,7 @@ void HETriggerAddon::preprocess() {
             releaseThreshold = ADC_MAX - releaseThreshold;
         }
 
+        bool wasActive = triggerActive[he];
         if (!options.triggers[he].rapidTrigger) {
             // no rapid trigger
             triggerActive[he] = value > activationThreshold;
@@ -148,6 +166,9 @@ void HETriggerAddon::preprocess() {
             }
         }
         if (triggerActive[he]) {
+            gamepad->state.heTriggers |= (1u << he);
+            if (!applyActions)
+                continue;
             switch (options.triggers[he].action) {
                 case GpioAction::BUTTON_PRESS_UP: gamepad->state.dpad |= GAMEPAD_MASK_UP; break;
                 case GpioAction::BUTTON_PRESS_DOWN: gamepad->state.dpad |= GAMEPAD_MASK_DOWN; break;
@@ -190,13 +211,17 @@ void HETriggerAddon::preprocess() {
                 case GpioAction::ANALOG_DIRECTION_RS_Y_NEG:	gamepad->state.ry = GAMEPAD_JOYSTICK_MIN; break;
                 case GpioAction::ANALOG_DIRECTION_RS_Y_POS:	gamepad->state.ry = GAMEPAD_JOYSTICK_MAX; break;
                 case GpioAction::BUTTON_PRESS_FN:	gamepad->state.aux |= AUX_MASK_FUNCTION; break;
-                case GpioAction::MENU_NAVIGATION_UP: EventManager::getInstance().triggerEvent(new GPMenuNavigateEvent(GpioAction::MENU_NAVIGATION_UP)); break;
-                case GpioAction::MENU_NAVIGATION_DOWN: EventManager::getInstance().triggerEvent(new GPMenuNavigateEvent(GpioAction::MENU_NAVIGATION_DOWN)); break;
-                case GpioAction::MENU_NAVIGATION_LEFT: EventManager::getInstance().triggerEvent(new GPMenuNavigateEvent(GpioAction::MENU_NAVIGATION_LEFT)); break;
-                case GpioAction::MENU_NAVIGATION_RIGHT: EventManager::getInstance().triggerEvent(new GPMenuNavigateEvent(GpioAction::MENU_NAVIGATION_RIGHT)); break;
-                case GpioAction::MENU_NAVIGATION_SELECT: EventManager::getInstance().triggerEvent(new GPMenuNavigateEvent(GpioAction::MENU_NAVIGATION_SELECT)); break;
-                case GpioAction::MENU_NAVIGATION_BACK: EventManager::getInstance().triggerEvent(new GPMenuNavigateEvent(GpioAction::MENU_NAVIGATION_BACK)); break;
-                case GpioAction::MENU_NAVIGATION_TOGGLE: EventManager::getInstance().triggerEvent(new GPMenuNavigateEvent(GpioAction::MENU_NAVIGATION_TOGGLE)); break;
+                case GpioAction::MENU_NAVIGATION_UP:
+                case GpioAction::MENU_NAVIGATION_DOWN:
+                case GpioAction::MENU_NAVIGATION_LEFT:
+                case GpioAction::MENU_NAVIGATION_RIGHT:
+                case GpioAction::MENU_NAVIGATION_SELECT:
+                case GpioAction::MENU_NAVIGATION_BACK:
+                case GpioAction::MENU_NAVIGATION_TOGGLE:
+                    if (!wasActive) {
+                        EventManager::getInstance().triggerEvent(new GPMenuNavigateEvent(options.triggers[he].action));
+                    }
+                    break;
                 default: break;
             }
         }

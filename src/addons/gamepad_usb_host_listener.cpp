@@ -19,16 +19,16 @@ void GamepadUSBHostListener::setup() {
     _controller_host = nullptr;
     _controller_dev_addr = 0;
     _controller_instance = 0;
-    _next_update = 0;
+    _last_update = getMillis() - GAMEPAD_HOST_POLL_INTERVAL_MS - 1;
 }
 
 void GamepadUSBHostListener::update() {
     if ( _controller_host == nullptr ) return;
 
     // Controller host updates (rumble, LEDs, etc. outside of gamepad input reports)
-    if (getMillis() > _next_update) {
+    if (getMillis() - _last_update > GAMEPAD_HOST_POLL_INTERVAL_MS) {
         _controller_host->update();
-        _next_update = getMillis() + GAMEPAD_HOST_POLL_INTERVAL_MS;
+        _last_update = getMillis();
     }
     
     // Controller host driver changes gamepad
@@ -108,8 +108,8 @@ void GamepadUSBHostListener::xmount(uint8_t dev_addr, uint8_t instance, uint8_t 
 }
 
 void GamepadUSBHostListener::unmount(uint8_t dev_addr) {
-    if ( _controller_host == nullptr ) return;
-    
+    if ( _controller_host == nullptr || _controller_dev_addr != dev_addr ) return;
+
     _controller_host->shutdown();
     delete _controller_host;
     _controller_host = nullptr;
