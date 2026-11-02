@@ -31,17 +31,18 @@
  #define GPIO_PIN_19 GpioAction::BUTTON_PRESS_R3     // R3     | RS     | RS      | R3       | 12     | RS     |
  #define GPIO_PIN_20 GpioAction::BUTTON_PRESS_A1     // A1     | Guide  | Home    | PS       | 13     | ~      |
  #define GPIO_PIN_21 GpioAction::BUTTON_PRESS_A2     // A2     | ~      | Capture | ~        | 14     | ~      |
- #define GPIO_PIN_27 GpioAction::BUTTON_PRESS_UP     // UP     | UP     | UP      | UP       | UP     | UP     |
- #define GPIO_PIN_26 GpioAction::BUTTON_PRESS_L3     // L3     | LS     | LS      | L3       | 11     | LS     |
  
+
  // Setting GPIO pins to assigned by add-on
  //
- #define GPIO_PIN_00 GpioAction::ASSIGNED_TO_ADDON
- #define GPIO_PIN_01 GpioAction::ASSIGNED_TO_ADDON
- #define GPIO_PIN_23 GpioAction::ASSIGNED_TO_ADDON
  #define GPIO_PIN_24 GpioAction::ASSIGNED_TO_ADDON
  #define GPIO_PIN_28 GpioAction::ASSIGNED_TO_ADDON
+ #define GPIO_PIN_26 GpioAction::ASSIGNED_TO_ADDON
+ #define GPIO_PIN_27 GpioAction::ASSIGNED_TO_ADDON
  
+ #define GPIO_PIN_23 GpioAction::BUTTON_PRESS_L3
+ #define GPIO_PIN_22 GpioAction::BUTTON_PRESS_UP
+
  // Keyboard Mapping Configuration
  //                                            // GP2040 | Xinput | Switch  | PS3/4/5  | Dinput | Arcade |
  #define KEY_DPAD_UP     HID_KEY_ARROW_UP      // UP     | UP     | UP      | UP       | UP     | UP     |
@@ -66,12 +67,12 @@
  
  #define USB_PERIPHERAL_ENABLED 1
  
- #define USB_PERIPHERAL_PIN_DPLUS 23
+ #define USB_PERIPHERAL_PIN_DPLUS 26
  #define USB_PERIPHERAL_PIN_ORDER 0
  
- #define DEFAULT_INPUT_MODE_R1 INPUT_MODE_XBONE
- #define DEFAULT_INPUT_MODE_B4 INPUT_MODE_PS5
- #define DEFAULT_PS5AUTHENTICATION_TYPE INPUT_MODE_AUTH_TYPE_USB
+#define DEFAULT_INPUT_MODE_R1 INPUT_MODE_XBONE
+#define DEFAULT_INPUT_MODE_B4 INPUT_MODE_P5GENERAL
+#define DEFAULT_PS5AUTHENTICATION_TYPE INPUT_MODE_AUTH_TYPE_USB
  
  #define TURBO_ENABLED 1
  #define GPIO_PIN_14 GpioAction::BUTTON_PRESS_TURBO
